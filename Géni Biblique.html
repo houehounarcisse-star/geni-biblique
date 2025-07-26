@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Biblique</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF CDN for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* Configuration de la police Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Un gris très clair */
+            color: #333;
+            display: flex;
+            flex-direction: column; /* Added to allow footer to stick to bottom */
+            justify-content: center;
+            align-items: flex-start; /* Alignement en haut pour le contenu */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-top: 40px;
+            flex-grow: 1; /* Allows container to take available space */
+        }
+        /* Styles pour les boutons de réponse */
+        .answer-option {
+            @apply block w-full text-left py-3 px-4 mb-4 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 transition-all duration-200 ease-in-out cursor-pointer text-gray-700 font-medium;
+            /* Style de base pour un bouton non sélectionné */
+            background-color: #f9fafb; /* Light gray for default */
+            color: #4a5568; /* Dark gray for text */
+            border: 1px solid #e2e8f0; /* Light border */
+        }
+        .answer-option.selected {
+            /* Styles de surbrillance EXTRÊMEMENT améliorés pour une visibilité maximale */
+            @apply bg-lime-400 border-lime-700 text-black shadow-2xl transform scale-105 ring-4 ring-lime-500; /* Couleurs vives et effets prononcés */
+            /* Styles inline pour forcer la surbrillance si Tailwind ne s'applique pas */
+            background-color: #a3e635 !important; /* Vert citron vif */
+            color: #000000 !important; /* Noir pur */
+            border-color: #4d7c0f !important; /* Bordure vert foncé */
+        }
+        .answer-option:disabled {
+            @apply opacity-70 cursor-not-allowed;
+        }
+        /* Styles pour le minuteur */
+        .timer-bar {
+            @apply h-2 bg-green-500 rounded-full transition-all duration-1000 ease-linear;
+        }
+        /* Styles pour le modal de message */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-content h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            color: #333;
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        /* Styles pour le menu hamburger */
+        #hamburger-menu-btn {
+            background-color: #60A5FA; /* Blue-400 */
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #hamburger-menu-btn:hover {
+            background-color: #3B82F6; /* Blue-500 */
+        }
+        #hamburger-menu-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor; /* Use current text color for the icon */
+        }
+
+        /* Styles for selected book buttons */
+        .book-button.selected {
+            @apply bg-green-500 border-green-700 ring-2 ring-green-500;
+        }
+        /* Styles for selected difficulty buttons */
+        .difficulty-option.selected {
+            @apply bg-green-100 border-green-500 text-green-800 ring-2 ring-green-500;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold text-blue-700 mb-2">Quiz Biblique</h1>
+            <p class="text-lg text-gray-600">Testez vos connaissances sur la Bible !</p>
+        </header>
+
+        <!-- Section de sélection du livre -->
+        <section id="book-selection" class="text-center">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Choisissez un ou plusieurs livres pour votre quiz :</h2>
+            
+            <input type="text" id="book-search-input" placeholder="Rechercher un livre..." 
+                   class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+            <!-- Bouton Hamburger Menu -->
+            <button id="hamburger-menu-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+                <span>Afficher les livres</span>
+            </button>
+
+            <div id="book-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 hidden">
+                <!-- Les boutons des livres seront insérés ici par JavaScript -->
+            </div>
+
+            <!-- Category Selection -->
+            <div class="mb-6 text-left mt-8">
+                <h3 class="text-xl font-semibold mb-3 text-gray-700">Sélectionnez les catégories de questions :</h3>
+                <div id="category-selection" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 rounded" value="Questions à Choix Multiples" checked data-category-type="mcq">
+                        <span class="ml-2 text-gray-700">Questions à Choix Multiples</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 rounded" value="Qui a dit" data-category-type="who-said">
+                        <span class="ml-2 text-gray-700">Qui a dit</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 rounded" value="Reconnaissance des versets" data-category-type="verse-rec">
+                        <span class="ml-2 text-gray-700">Reconnaissance des versets</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 rounded" value="Devinettes Bibliques" data-category-type="riddle">
+                        <span class="ml-2 text-gray-700">Devinettes Bibliques</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 rounded" value="Faits Bibliques Généraux" data-category-type="general-facts">
+                        <span class="ml-2 text-gray-700">Faits Bibliques Généraux</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Difficulty Selection -->
+            <div class="mb-6 text-left mt-8">
+                <h3 class="text-xl font-semibold mb-3 text-gray-700">Choisissez votre session :</h3>
+                <p class="text-sm text-gray-600 mb-4">"Petit" est facile, "Moyen" est de difficulté moyenne, "Junior" est difficile et "Moniteur" est très difficile.</p>
+                <div id="difficulty-selection" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <label class="inline-flex items-center">
+                        <input type="radio" class="form-radio h-5 w-5 text-blue-600" name="difficulty" value="Petit">
+                        <span class="ml-2 text-gray-700">Petit</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" class="form-radio h-5 w-5 text-blue-600" name="difficulty" value="Moyen">
+                        <span class="ml-2 text-gray-700">Moyen</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" class="form-radio h-5 w-5 text-blue-600" name="difficulty" value="Junior">
+                        <span class="ml-2 text-gray-700">Junior</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" class="form-radio h-5 w-5 text-blue-600" name="difficulty" value="Moniteur">
+                        <span class="ml-2 text-gray-700">Moniteur</span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="start-multi-quiz-btn" disabled
+                    class="mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                Démarrer le Quiz
+            </button>
+        </section>
+
+        <!-- Section du quiz -->
+        <section id="quiz-container" class="hidden">
+            <h2 id="quiz-book-title" class="text-3xl font-bold text-gray-800 mb-6 text-center"></h2>
+            
+            <div class="mb-4">
+                <div class="text-right text-sm text-gray-500 mb-1">Temps restant : <span id="timer-display" class="font-bold text-blue-600"></span> secondes</div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="timer-bar" class="timer-bar"></div>
+                </div>
+            </div>
+
+            <div id="loading-spinner" class="text-center py-10 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto mb-4"></div>
+                <p class="text-lg text-gray-600">Génération des questions par l'API Gemini...</p>
+            </div>
+
+            <div id="question-display" class="hidden">
+                <p id="question-text" class="text-xl font-semibold mb-6"></p>
+                <!-- Added flex flex-col to answers-container to ensure vertical stacking -->
+                <div id="answers-container" class="flex flex-col">
+                    <!-- Les réponses seront insérées ici par JavaScript -->
+                </div>
+            </div>
+            
+            <div class="flex justify-between mt-8">
+                <button id="next-question-btn" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Question Suivante
+                </button>
+                <button id="submit-quiz-btn" class="hidden bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Terminer le Quiz
+                </button>
+            </div>
+        </section>
+
+        <!-- Section des résultats -->
+        <section id="results-container" class="hidden text-center">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Vos Résultats</h2>
+            <p class="text-2xl mb-4">Score : <span id="score" class="font-bold text-blue-700"></span> / <span id="total-questions" class="font-bold text-gray-600"></span></p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4 mt-4">
+                <button id="restart-quiz-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Recommencer le Quiz
+                </button>
+                <button id="continue-quiz-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Continuer le quiz sur ces livres
+                </button>
+                <button id="choose-another-book-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Choisir un autre livre
+                </button>
+                <button id="export-pdf-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Exporter le quiz (Questions & Réponses) en PDF
+                </button>
+            </div>
+        </section>
+
+        <!-- Section de révision des réponses -->
+        <section id="answers-review-container" class="hidden mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6 text-center">Revue des Réponses</h3>
+            <!-- Les questions et réponses détaillées seront insérées ici par JavaScript -->
+        </section>
+    </div>
+
+    <footer class="text-center mt-8 py-4 text-gray-600 text-sm">
+        <p>Tous droits réservés 2025 - Créé par HOUEHOU Kotchami Narcisse.</p>
+    </footer>
+
+    <!-- Modal pour les messages (erreurs, etc.) -->
+    <div id="message-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-bold"></h3>
+            <p id="modal-message" class="text-gray-700"></p>
+            <button id="modal-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg">Fermer</button>
+        </div>
+    </div>
+
+    <script>
+        // Liste complète des 66 livres de la Bible (version protestante)
+        const bibleBooks = [
+            "Genèse", "Exode", "Lévitique", "Nombres", "Deutéronome", "Josué", "Juges", "Ruth",
+            "1 Samuel", "2 Samuel", "1 Rois", "2 Rois", "1 Chroniques", "2 Chroniques", "Esdras", "Néhémie",
+            "Esther", "Job", "Psaumes", "Proverbes", "Ecclésiaste", "Cantique des Cantiques", "Ésaïe",
+            "Jérémie", "Lamentations", "Ézéchiel", "Daniel", "Osée", "Joël", "Amos", "Abdias", "Jonas",
+            "Michée", "Nahum", "Habacuc", "Sophonie", "Aggée", "Zacharie", "Malachie",
+            "Matthieu", "Marc", "Luc", "Jean", "Actes des Apôtres", "Romains", "1 Corinthiens",
+            "2 Corinthiens", "Galates", "Éphésiens", "Philippiens", "Colossiens", "1 Thessaloniciens",
+            "2 Thessaloniciens", "1 Timothée", "2 Timothée", "Tite", "Philémon", "Hébreux", "Jacques",
+            "1 Pierre", "2 Pierre", "1 Jean", "2 Jean", "3 Jean", "Jude", "Apocalypse"
+        ];
+
+        // --- Éléments du DOM ---
+        const bookSelectionSection = document.getElementById('book-selection');
+        const bookSearchInput = document.getElementById('book-search-input');
+        const bookListDiv = document.getElementById('book-list');
+        const startMultiQuizBtn = document.getElementById('start-multi-quiz-btn');
+        const categorySelectionDiv = document.getElementById('category-selection');
+        const difficultySelectionDiv = document.getElementById('difficulty-selection');
+        const quizContainerSection = document.getElementById('quiz-container');
+        const quizBookTitle = document.getElementById('quiz-book-title');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const questionDisplayDiv = document.getElementById('question-display');
+        const questionText = document.getElementById('question-text');
+        const answersContainer = document.getElementById('answers-container');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const submitQuizBtn = document.getElementById('submit-quiz-btn');
+        const resultsContainerSection = document.getElementById('results-container');
+        const scoreSpan = document.getElementById('score');
+        const totalQuestionsSpan = document.getElementById('total-questions');
+        const restartQuizBtn = document.getElementById('restart-quiz-btn');
+        const continueQuizBtn = document.getElementById('continue-quiz-btn'); 
+        const chooseAnotherBookBtn = document.getElementById('choose-another-book-btn'); 
+        const exportPdfBtn = document.getElementById('export-pdf-btn'); 
+        const timerDisplay = document.getElementById('timer-display');
+        const timerBar = document.getElementById('timer-bar');
+        const answersReviewContainer = document.getElementById('answers-review-container'); 
+
+        // Modal elements
+        const messageModal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        // Hamburger menu elements
+        const hamburgerMenuBtn = document.getElementById('hamburger-menu-btn');
+
+        // --- Variables du Quiz ---
+        let currentBookQuestions = [];
+        let currentQuestionIndex = 0;
+        let userScore = 0;
+        let selectedAnswer = null;
+        let timerInterval;
+        const TIME_PER_QUESTION = 30; // Secondes par question
+        let timeLeft = TIME_PER_QUESTION;
+        let quizResultsDetailed = []; // Stores details for review and PDF export
+        let currentSelectedBooks = []; // Stores the names of currently selected books (array)
+        let currentSelectedCategories = []; // Stores the names of currently selected categories (array)
+        let currentSelectedDifficulty = ''; // Stores the selected difficulty level
+
+        // --- Fonctions utilitaires ---
+
+        // Affiche un message modal personnalisé
+        function showMessageModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+
+        // Cache le message modal
+        modalCloseBtn.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+        });
+
+        // Fonction pour afficher les boutons de sélection des livres (filtrés par recherche)
+        function displayBookSelection(filterText = '') {
+            bookListDiv.innerHTML = ''; // Nettoie les anciens boutons
+            const lowerCaseFilterText = filterText.toLowerCase();
+
+            const filteredBooks = bibleBooks.filter(book => 
+                book.toLowerCase().includes(lowerCaseFilterText)
+            );
+
+            filteredBooks.forEach(book => {
+                const button = document.createElement('button');
+                button.classList.add('book-button', 'bg-blue-500', 'hover:bg-blue-600', 'text-white', 'font-semibold', 'py-3', 'px-4', 'rounded-lg', 'shadow-md', 'transition-all', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-105');
+                button.textContent = book;
+                button.setAttribute('data-book', book); // Store book name in data attribute
+
+                // Apply 'selected' class if the book is already in currentSelectedBooks
+                if (currentSelectedBooks.includes(book)) {
+                    button.classList.add('selected');
+                }
+
+                button.addEventListener('click', () => toggleBookSelection(book, button));
+                bookListDiv.appendChild(button);
+            });
+            bookSelectionSection.classList.remove('hidden');
+            quizContainerSection.classList.add('hidden');
+            resultsContainerSection.classList.add('hidden');
+            answersReviewContainer.classList.add('hidden'); // Hide review section on new quiz
+            bookListDiv.classList.add('hidden'); // Keep hidden initially
+            updateStartQuizButtonState(); // Update button state after rendering books
+        }
+
+        // Toggle visibility of book list
+        hamburgerMenuBtn.addEventListener('click', () => {
+            bookListDiv.classList.toggle('hidden');
+            if (bookListDiv.classList.contains('hidden')) {
+                hamburgerMenuBtn.querySelector('span').textContent = 'Afficher les livres';
+            } else {
+                hamburgerMenuBtn.querySelector('span').textContent = 'Masquer les livres';
+            }
+        });
+
+        // Toggle book selection
+        function toggleBookSelection(bookName, buttonElement) {
+            const index = currentSelectedBooks.indexOf(bookName);
+            if (index > -1) {
+                // Book is already selected, unselect it
+                currentSelectedBooks.splice(index, 1);
+                buttonElement.classList.remove('selected');
+            } else {
+                // Book is not selected, select it
+                currentSelectedBooks.push(bookName);
+                buttonElement.classList.add('selected');
+            }
+            updateStartQuizButtonState();
+        }
+
+        // Function to get currently selected categories from checkboxes
+        function getSelectedCategories() {
+            const checkboxes = categorySelectionDiv.querySelectorAll('input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        // Function to get selected difficulty
+        function getSelectedDifficulty() {
+            const selectedRadio = difficultySelectionDiv.querySelector('input[name="difficulty"]:checked');
+            return selectedRadio ? selectedRadio.value : '';
+        }
+
+        // Update the state of the "Démarrer le Quiz" button
+        function updateStartQuizButtonState() {
+            const selectedBooksCount = currentSelectedBooks.length;
+            const selectedCategoriesCount = getSelectedCategories().length;
+            const selectedDifficulty = getSelectedDifficulty();
+
+            if (selectedBooksCount > 0 && selectedCategoriesCount > 0 && selectedDifficulty !== '') {
+                startMultiQuizBtn.disabled = false;
+            } else {
+                startMultiQuizBtn.disabled = true;
+            }
+        }
+
+        // Event listener for category checkboxes
+        categorySelectionDiv.addEventListener('change', () => {
+            updateStartQuizButtonState();
+        });
+
+        // Event listener for difficulty radio buttons
+        difficultySelectionDiv.addEventListener('change', (event) => {
+            // Remove 'selected' class from all difficulty options
+            difficultySelectionDiv.querySelectorAll('input[name="difficulty"]').forEach(radio => {
+                radio.closest('label').classList.remove('selected');
+            });
+            // Add 'selected' class to the parent label of the checked radio
+            if (event.target.checked) {
+                event.target.closest('label').classList.add('selected');
+            }
+            currentSelectedDifficulty = getSelectedDifficulty(); // Update the variable
+            updateStartQuizButtonState();
+        });
+
+
+        // Event listener for search input
+        bookSearchInput.addEventListener('input', (event) => {
+            displayBookSelection(event.target.value);
+        });
+
+        // Event listener for starting the quiz with selected books and categories
+        startMultiQuizBtn.addEventListener('click', () => {
+            if (currentSelectedBooks.length === 0) {
+                showMessageModal("Sélection requise", "Veuillez sélectionner au moins un livre pour commencer le quiz.");
+                return;
+            }
+            currentSelectedCategories = getSelectedCategories(); // Update currentSelectedCategories
+            if (currentSelectedCategories.length === 0) {
+                showMessageModal("Sélection requise", "Veuillez sélectionner au moins une catégorie de questions pour commencer le quiz.");
+                return;
+            }
+            currentSelectedDifficulty = getSelectedDifficulty(); // Update currentSelectedDifficulty
+            if (currentSelectedDifficulty === '') {
+                showMessageModal("Sélection requise", "Veuillez sélectionner un niveau de difficulté pour commencer le quiz.");
+                return;
+            }
+            startQuiz(currentSelectedBooks, currentSelectedCategories, currentSelectedDifficulty);
+        });
+
+
+        // Fonction pour démarrer le minuteur
+        function startTimer() {
+            clearInterval(timerInterval); // S'assure qu'aucun ancien minuteur ne tourne
+            timeLeft = TIME_PER_QUESTION;
+            timerDisplay.textContent = timeLeft;
+            timerBar.style.width = '100%';
+            timerBar.classList.remove('bg-red-500', 'bg-yellow-500');
+            timerBar.classList.add('bg-green-500');
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = timeLeft;
+                const percentage = (timeLeft / TIME_PER_QUESTION) * 100;
+                timerBar.style.width = `${percentage}%`;
+
+                if (percentage < 30) {
+                    timerBar.classList.remove('bg-green-500', 'bg-yellow-500');
+                    timerBar.classList.add('bg-red-500');
+                } else if (percentage < 60) {
+                    timerBar.classList.remove('bg-green-500', 'bg-red-500');
+                    timerBar.classList.add('bg-yellow-500');
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeUp();
+                }
+            }, 1000);
+        }
+
+        // Gère le cas où le temps est écoulé
+        function handleTimeUp() {
+            // Désactive toutes les options de réponse
+            document.querySelectorAll('.answer-option').forEach(btn => {
+                btn.disabled = true;
+            });
+            // Passe à la question suivante (ou termine le quiz)
+            checkAnswer(); // Vérifie la réponse (même si aucune n'est sélectionnée, score 0)
+            if (currentQuestionIndex < currentBookQuestions.length - 1) {
+                nextQuestionBtn.classList.remove('hidden');
+                submitQuizBtn.classList.add('hidden');
+            } else {
+                nextQuestionBtn.classList.add('hidden');
+                submitQuizBtn.classList.remove('hidden');
+            }
+            showMessageModal("Temps écoulé !", "Vous n'avez pas répondu à temps pour cette question.");
+        }
+
+        // Fonction pour récupérer les questions via l'API Gemini pour les livres et catégories sélectionnés
+        async function startQuiz(books, categories, difficulty) {
+            bookSelectionSection.classList.add('hidden');
+            quizContainerSection.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden');
+            questionDisplayDiv.classList.add('hidden');
+            nextQuestionBtn.classList.add('hidden');
+            submitQuizBtn.classList.add('hidden');
+            
+            const quizBookNames = books.length > 0 ? books.join(', ') : 'Livres sélectionnés';
+            const quizCategoryNames = categories.length > 0 ? categories.join(', ') : 'Catégories sélectionnées';
+            quizBookTitle.textContent = `Quiz sur : ${quizBookNames} (Catégories: ${quizCategoryNames}, Difficulté: ${difficulty})`;
+
+            currentBookQuestions = []; // Reset questions for the new quiz
+            currentQuestionIndex = 0;
+            userScore = 0;
+            quizResultsDetailed = []; // Reset detailed results for new quiz
+
+            try {
+                let difficultyDescription = '';
+                switch (difficulty) {
+                    case 'Petit':
+                        difficultyDescription = 'très faciles, basées sur des connaissances bibliques très courantes et des personnages ou événements très connus.';
+                        break;
+                    case 'Moyen':
+                        difficultyDescription = 'de difficulté modérée, nécessitant une connaissance plus approfondie mais toujours accessible.';
+                        break;
+                    case 'Junior':
+                        difficultyDescription = 'difficiles, portant sur des détails spécifiques, des passages moins évidents ou des livres moins fréquemment étudiés.';
+                        break;
+                    case 'Moniteur':
+                        difficultyDescription = 'très difficiles, exigeant une connaissance très pointue, des détails obscurs, des interconnexions complexes entre livres, ou des chapitres/versets peu connus.';
+                        break;
+                }
+
+                let categoryInstructions = '';
+                if (categories.length === 1) {
+                    const singleCategory = categories[0];
+                    switch (singleCategory) {
+                        case "Questions à Choix Multiples":
+                            categoryInstructions = `Toutes les questions doivent être des questions à choix multiples factuelles sur le contenu des livres.`;
+                            break;
+                        case "Qui a dit":
+                            categoryInstructions = `Toutes les questions doivent être du type "Qui a dit cette phrase ?" suivie de la phrase.`;
+                            break;
+                        case "Reconnaissance des versets":
+                            categoryInstructions = `Toutes les questions doivent fournir un court passage et demander "De quel chapitre et verset est extrait ce passage ?". La réponse doit inclure le livre, le chapitre et le verset (ex: Jean 3:16).`;
+                            break;
+                        case "Devinettes Bibliques":
+                            categoryInstructions = `Toutes les questions doivent être des devinettes décrivant un mot clé du livre en utilisant le format "Commençant par [première lettre]... mot de [nombre de lettres] lettres désignant [description]".`;
+                            break;
+                        case "Faits Bibliques Généraux":
+                            categoryInstructions = `Toutes les questions doivent être des faits bibliques généraux comme : "Quel est le livre qui vient avant/après [nom du livre] ?", "Combien de chapitres compte le livre de [nom du livre] ?", "Quel est le plus court chapitre du livre de [nom du livre] ?", "Quel est le plus long chapitre du livre de [nom du livre] ?".`;
+                            break;
+                    }
+                    categoryInstructions += ` Il est impératif que toutes les questions soient de ce type unique.`;
+                } else {
+                    categoryInstructions = `Les questions doivent inclure un mélange des catégories suivantes : ${categories.join(', ')}.
+Pour la catégorie "Questions à Choix Multiples", pose une question factuelle sur le contenu du livre.
+Pour la catégorie "Qui a dit", la question doit être "Qui a dit cette phrase ?" suivie de la phrase.
+Pour la catégorie "Reconnaissance des versets", fournis un court passage et demande "De quel chapitre et verset est extrait ce passage ?". La réponse doit inclure le livre, le chapitre et le verset (ex: Jean 3:16).
+Pour la catégorie "Devinettes Bibliques", décris un mot clé du livre en utilisant le format "Commençant par [première lettre]... mot de [nombre de lettres] lettres désignant [description]".
+Pour la catégorie "Faits Bibliques Généraux", pose des questions variées comme : "Quel est le livre qui vient avant/après [nom du livre] ?", "Combien de chapitres compte le livre de [nom du livre] ?", "Quel est le plus court chapitre du livre de [nom du livre] ?", "Quel est le plus long chapitre du livre de [nom du livre] ?".`;
+                }
+
+                // Construct a single comprehensive prompt for Gemini, including a timestamp for uniqueness
+                const prompt = `Génère 10 questions de quiz à choix multiples, claires, concises et bien formulées, sur les livres bibliques suivants : ${books.join(', ')}. La difficulté générale des questions doit être "${difficulty}" (questions ${difficultyDescription}).
+${categoryInstructions}
+Chaque question doit avoir 4 options de réponse distinctes, dont une seule est correcte. Le format doit être un tableau JSON avec des objets, chaque objet ayant les propriétés 'question' (string), 'options' (array of strings), et 'answer' (string). (Timestamp pour unicité: ${Date.now()})`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "question": { "type": "STRING" },
+                                    "options": { "type": "ARRAY", "items": { "type": "STRING" } },
+                                    "answer": { "type": "STRING" }
+                                },
+                                "propertyOrdering": ["question", "options", "answer"]
+                            }
+                        }
+                    }
+                };
+
+                // IMPORTANT: The API key is now provided by the user.
+                const apiKey = "AIzaSyBQQ_0PzSO2wQDQPyMl4WSMZGk3Ff08xzw"; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const jsonString = result.candidates[0].content.parts[0].text;
+                    currentBookQuestions = JSON.parse(jsonString);
+
+                    if (currentBookQuestions.length === 0) {
+                        throw new Error("Aucune question générée par l'API pour les critères sélectionnés.");
+                    }
+
+                    // Mélange toutes les questions combinées
+                    currentBookQuestions.sort(() => 0.5 - Math.random());
+                    
+                    loadingSpinner.classList.add('hidden');
+                    questionDisplayDiv.classList.remove('hidden');
+                    loadQuestion();
+                } else {
+                    throw new Error("Réponse de l'API inattendue ou vide.");
+                }
+
+            } catch (error) {
+                console.error("Erreur lors de la récupération des questions:", error);
+                loadingSpinner.classList.add('hidden');
+                showMessageModal("Erreur de chargement", "Impossible de générer les questions pour les livres et catégories sélectionnés. Veuillez réessayer ou choisir d'autres options. Détails: " + error.message);
+                displayBookSelection(); // Retourne à la sélection de livre
+            }
+        }
+
+        // Fonction pour charger et afficher une question
+        function loadQuestion() {
+            clearInterval(timerInterval); // Arrête le minuteur de la question précédente
+            if (currentQuestionIndex < currentBookQuestions.length) {
+                const questionData = currentBookQuestions[currentQuestionIndex];
+                // Ajoute la numérotation à la question
+                questionText.textContent = `${currentQuestionIndex + 1}. ${questionData.question}`;
+                answersContainer.innerHTML = '';
+                selectedAnswer = null; // Réinitialise la sélection
+
+                // Mélange les options de réponse
+                const shuffledOptions = [...questionData.options].sort(() => 0.5 - Math.random());
+
+                shuffledOptions.forEach(option => {
+                    const answerButton = document.createElement('button');
+                    answerButton.classList.add('answer-option');
+                    answerButton.textContent = option;
+                    answerButton.addEventListener('click', () => selectAnswer(answerButton, option));
+                    answersContainer.appendChild(answerButton);
+                });
+
+                nextQuestionBtn.classList.add('hidden');
+                submitQuizBtn.classList.add('hidden');
+                startTimer(); // Démarre le minuteur pour la nouvelle question
+
+            } else {
+                showResults();
+            }
+        }
+
+        // Fonction pour sélectionner une réponse
+        function selectAnswer(button, option) {
+            console.log("selectAnswer called for option:", option); // Debugging: log when function is called
+            // Désélectionne toutes les options précédemment sélectionnées
+            document.querySelectorAll('.answer-option').forEach(btn => {
+                btn.classList.remove('selected');
+                // Réinitialise les styles inline des options non sélectionnées
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+            });
+            console.log("Removed 'selected' class and inline styles from all options.");
+
+            button.classList.add('selected');
+            // Applique des styles inline pour forcer la surbrillance
+            button.style.backgroundColor = '#a3e635'; /* Vert citron vif */
+            button.style.color = '#000000'; /* Noir pur */
+            button.style.borderColor = '#4d7c0f'; /* Bordure vert foncé */
+            console.log("Added 'selected' class and inline styles to the clicked button.");
+
+            selectedAnswer = option;
+
+            // Affiche le bouton "Question Suivante" ou "Terminer le Quiz" après sélection
+            if (currentQuestionIndex < currentBookQuestions.length - 1) {
+                nextQuestionBtn.classList.remove('hidden');
+                submitQuizBtn.classList.add('hidden');
+            } else {
+                nextQuestionBtn.classList.add('hidden');
+                submitQuizBtn.classList.remove('hidden');
+            }
+        }
+
+        // Fonction pour vérifier la réponse et mettre à jour le score, et enregistrer pour la révision
+        function checkAnswer() {
+            clearInterval(timerInterval); // Arrête le minuteur une fois la réponse vérifiée
+            const questionData = currentBookQuestions[currentQuestionIndex];
+            
+            // Désactive tous les boutons de réponse pour empêcher d'autres clics
+            document.querySelectorAll('.answer-option').forEach(btn => {
+                btn.disabled = true;
+            });
+
+            const isCorrect = (selectedAnswer === questionData.answer);
+            if (isCorrect) {
+                userScore++;
+            }
+
+            // Enregistre le résultat pour la révision ultérieure
+            quizResultsDetailed.push({
+                question: questionData.question,
+                userAnswer: selectedAnswer, // Peut être null si le temps est écoulé
+                correctAnswer: questionData.answer,
+                isCorrect: isCorrect
+            });
+        }
+
+        // Événement pour passer à la question suivante
+        nextQuestionBtn.addEventListener('click', () => {
+            checkAnswer();
+            currentQuestionIndex++;
+            loadQuestion();
+        });
+
+        // Événement pour terminer le quiz
+        submitQuizBtn.addEventListener('click', () => {
+            checkAnswer(); // Vérifie la dernière question
+            showResults();
+        });
+
+        // Fonction pour afficher la page de résultats
+        function showResults() {
+            clearInterval(timerInterval); // S'assure que le minuteur est arrêté
+            quizContainerSection.classList.add('hidden');
+            resultsContainerSection.classList.remove('hidden');
+            scoreSpan.textContent = userScore;
+            totalQuestionsSpan.textContent = currentBookQuestions.length;
+            displayAnswerReview(); // Appelle la nouvelle fonction pour afficher les réponses détaillées
+        }
+
+        // Fonction pour afficher la révision des réponses
+        function displayAnswerReview() {
+            answersReviewContainer.innerHTML = ''; // Nettoie la révision précédente
+            answersReviewContainer.classList.remove('hidden'); // Affiche la section de révision
+
+            quizResultsDetailed.forEach((result, index) => {
+                const reviewItem = document.createElement('div');
+                reviewItem.classList.add('mb-6', 'p-4', 'rounded-lg', 'shadow-sm', 'border');
+                reviewItem.style.borderColor = result.isCorrect ? '#d4edda' : '#f8d7da'; // Light green or light red border
+                reviewItem.style.backgroundColor = result.isCorrect ? '#e6ffe6' : '#ffe6e6'; // Lighter background
+
+                // Question text
+                const questionReviewText = document.createElement('p');
+                questionReviewText.classList.add('font-semibold', 'text-lg', 'mb-2', 'text-gray-800');
+                questionReviewText.textContent = `${index + 1}. ${result.question}`;
+                reviewItem.appendChild(questionReviewText);
+
+                // User's answer
+                const userAnswerText = document.createElement('p');
+                userAnswerText.classList.add('text-gray-700', 'mb-1');
+                if (result.userAnswer === null) {
+                    userAnswerText.textContent = `Votre réponse : Pas de réponse (temps écoulé)`;
+                    userAnswerText.classList.add('text-red-600', 'font-medium');
+                } else {
+                    userAnswerText.textContent = `Votre réponse : ${result.userAnswer}`;
+                    userAnswerText.classList.add(result.isCorrect ? 'text-green-700' : 'text-red-700', 'font-medium');
+                }
+                reviewItem.appendChild(userAnswerText);
+
+                // Correct answer
+                const correctAnswerText = document.createElement('p');
+                correctAnswerText.classList.add('font-medium', 'text-green-800');
+                correctAnswerText.textContent = `Bonne réponse : ${result.correctAnswer}`;
+                reviewItem.appendChild(correctAnswerText);
+
+                answersReviewContainer.appendChild(reviewItem);
+            });
+        }
+
+        // Fonction pour exporter le quiz et les résultats en PDF
+        async function exportQuizToPdf() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            let y = 20; // Position Y initiale
+
+            doc.setFontSize(22);
+            doc.text("Rapport de Quiz Biblique", 105, y, null, null, "center");
+            y += 10;
+            doc.setFontSize(16);
+            // Use currentSelectedBooks to generate the book list for the PDF title
+            const bookListForPdf = currentSelectedBooks.length > 0 ? currentSelectedBooks.join(', ') : 'Non spécifié';
+            doc.text(`Livre(s): ${bookListForPdf}`, 105, y, null, null, "center");
+            y += 10;
+            doc.text(`Score Final: ${userScore} / ${currentBookQuestions.length}`, 105, y, null, null, "center");
+            y += 20;
+
+            doc.setFontSize(12);
+
+            quizResultsDetailed.forEach((result, index) => {
+                // Gérer les sauts de page
+                if (y > 270) { // Environ 270mm pour laisser de la marge en bas
+                    doc.addPage();
+                    y = 20; // Réinitialiser la position Y pour la nouvelle page
+                }
+
+                doc.setFontSize(14);
+                // Utiliser splitTextToSize pour gérer les lignes longues
+                let questionLines = doc.splitTextToSize(`${index + 1}. Question: ${result.question}`, 180); // Max width 180mm
+                doc.text(questionLines, 10, y);
+                y += (questionLines.length * 7); // Adjust Y based on number of lines
+
+                doc.setFontSize(12);
+                doc.setTextColor('#28a745'); // Toujours vert pour la bonne réponse
+                let correctAnswerLines = doc.splitTextToSize(`Bonne réponse : ${result.correctAnswer}`, 180);
+                doc.text(correctAnswerLines, 10, y);
+                y += (correctAnswerLines.length * 7);
+
+                y += 8; // Espace après chaque bloc de question
+            });
+
+            doc.save(`QuizBiblique_${bookListForPdf.replace(/\s/g, '_')}_Resultats.pdf`);
+        }
+
+        // Événement pour recommencer le quiz (retourne à la sélection de livre)
+        restartQuizBtn.addEventListener('click', () => {
+            currentSelectedBooks = []; // Clear selected books
+            bookSearchInput.value = ''; // Clear search input
+            // Reset category checkboxes
+            categorySelectionDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = (cb.value === "Questions à Choix Multiples"); // Default to MCQ
+            });
+            currentSelectedCategories = ["Questions à Choix Multiples"]; // Reset selected categories
+            // Reset difficulty radio buttons
+            difficultySelectionDiv.querySelectorAll('input[name="difficulty"]').forEach(radio => {
+                radio.checked = false;
+                radio.closest('label').classList.remove('selected');
+            });
+            currentSelectedDifficulty = ''; // Reset selected difficulty
+            displayBookSelection();
+        });
+
+        // Événement pour continuer le quiz sur le même livre
+        continueQuizBtn.addEventListener('click', () => {
+            // Reset quiz state
+            currentQuestionIndex = 0;
+            userScore = 0;
+            quizResultsDetailed = [];
+            // Hide results and review sections
+            resultsContainerSection.classList.add('hidden');
+            answersReviewContainer.classList.add('hidden');
+            // Fetch new questions for the same books and categories that were previously selected
+            startQuiz(currentSelectedBooks, currentSelectedCategories, currentSelectedDifficulty);
+        });
+
+        // Événement pour choisir un autre livre (retourne à la sélection de livre)
+        chooseAnotherBookBtn.addEventListener('click', () => {
+            currentSelectedBooks = []; // Clear selected books
+            bookSearchInput.value = ''; // Clear search input
+            // Reset category checkboxes
+            categorySelectionDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = (cb.value === "Questions à Choix Multiples"); // Default to MCQ
+            });
+            currentSelectedCategories = ["Questions à Choix Multiples"]; // Reset selected categories
+            // Reset difficulty radio buttons
+            difficultySelectionDiv.querySelectorAll('input[name="difficulty"]').forEach(radio => {
+                radio.checked = false;
+                radio.closest('label').classList.remove('selected');
+            });
+            currentSelectedDifficulty = ''; // Reset selected difficulty
+            displayBookSelection();
+        });
+
+        // Événement pour exporter en PDF
+        exportPdfBtn.addEventListener('click', exportQuizToPdf);
+
+        // Initialiser en affichant la sélection de livres au chargement de la page
+        displayBookSelection();
+    </script>
+</body>
+</html>
